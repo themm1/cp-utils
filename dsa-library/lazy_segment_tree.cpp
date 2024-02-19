@@ -1,86 +1,66 @@
 #include <bits/stdc++.h>
 using namespace std;
 
-using ll = long long;
-using ld = long double;
-using pii = pair<int, int>;
-using pll = pair<ll, ll>;
-#define pb push_back
-#define ff first
-#define ss second
-#define all(x) begin(x), end(x)
-#define sz(x) (int)x.size()
-#define contains(s,x) ((s).find(x) != (s).end())
-
-/*
-Lazy segment tree with O(log n) complexity on query and range update operations.
-Base row for segment tree and neutral values and functions for lazy and segments
-fields have to be passed.  
-*/
+/* Lazy segment tree with O(log N) complexities on query and range update operations. */
 struct LazySegTree {
         int N;
         vector<int> segtree, lazy;
-        int (*func)(int, int), (*update_func)(int, int);
-        int seg_neutral, lazy_neutral;
-        LazySegTree(vector<int> &v, int seg_neutral_, int lazy_neutral_,
-                        int (*func_)(int, int), int (*update_func_)(int, int))
-        {
-                N = pow(2, ceil(log2(v.size())));
-                func = func_;
-                update_func = update_func_;
-                seg_neutral = seg_neutral_;
-                lazy_neutral = lazy_neutral_;
 
-                // intialize base row
+        int seg_neutral = INT_MAX, lazy_neutral = 0;
+        int func(int a, int b) {
+                return min(a, b);
+        }
+        int update_func(int a, int b) {
+                return a + b;
+        }
+        LazySegTree(vector<int> &a) {
+                N = (1 << (32 - __builtin_clz(a.size())));
                 segtree.assign(2 * N, seg_neutral);
                 lazy.assign(2 * N, lazy_neutral);
-                for (int i = 0; i < v.size(); i++)
-                        segtree[N + i] = v[i];
-
-                // initialize tree
-                int s = N;
-                while (s > 1) {
-                        for (int i = s; i < 2 * s; i += 2)
-                                segtree[i / 2] = func(segtree[i], segtree[i + 1]);
-                        s /= 2;
+                
+                for (int i = 0; i < a.size(); i++) {
+                        segtree[N + i] = a[i];
+                }
+                for (int i = N - 1; i > 0; i--) {
+                        segtree[i] = func(segtree[i * 2], segtree[i * 2 + 1]);
                 }
         }
 
-        int _query(int l, int r, int i, int j, int x) {
-                if (i >= r || j <= l) return seg_neutral;
-                if (i >= l && j <= r) return update_func(segtree[x], lazy[x]);
+        int _query(int l, int r, int i, int j, int idx) {
+                if (l <= i && j <= r) {
+                        return update_func(segtree[idx], lazy[idx]);
+                } else if ((i <= l && l < j) || (i < r && r <= j)) {
+                        // propagate lazy value
+                        segtree[idx] = update_func(segtree[idx], lazy[idx]);
+                        lazy[2 * idx] = update_func(lazy[2 * idx], lazy[idx]);
+                        lazy[2 * idx + 1] = update_func(lazy[2 * idx + 1], lazy[idx]);
+                        lazy[idx] = lazy_neutral;
 
-                lazy[2 * x] = update_func(lazy[2 * x], lazy[x]);
-                lazy[2 * x + 1] = update_func(lazy[2 * x + 1], lazy[x]);
-                segtree[x] = update_func(segtree[x], lazy[x]);
-                lazy[x] = lazy_neutral;
-
-                return func(
-                        _query(l, r, i, (i + j) / 2, x * 2),
-                        _query(l, r, (i + j) / 2, j, x * 2 + 1)
-                );
-        }
-
-        void _update(int l, int r, int i, int j, int x, int val) {
-                if (i >= r || j <= l) return;
-                if (i >= l && j <= r) {
-                        lazy[x] = update_func(lazy[x], val);
-                        return;
+                        int mid = (i + j) / 2;
+                        return func(_query(l, r, i, mid, idx * 2), _query(l, r, mid, j, idx * 2 + 1));
+                } else {
+                        return seg_neutral;
                 }
-
-                _update(l, r, i, (i + j) / 2, x * 2, val);
-                _update(l, r, (i + j) / 2, j, x * 2 + 1, val);
-
-                segtree[x] = func(
-                        update_func(lazy[2 * x], segtree[2 * x]),
-                        update_func(lazy[2 * x + 1], segtree[2 * x + 1])
-                );
         }
 
+        void _update(int l, int r, int i, int j, int idx, int val) {
+                if (l <= i && j <= r) {
+                        lazy[idx] = update_func(lazy[idx], val);
+                } else if ((i <= l && l < j) || (i < r && r <= j)) {
+                        int mid = (i + j) / 2;
+                        _update(l, r, i, mid, idx * 2, val);
+                        _update(l, r, mid, j, idx * 2 + 1, val);
+                        segtree[idx] = func(update_func(segtree[2 * idx], lazy[2 * idx]),
+                                            update_func(segtree[2 * idx + 1], lazy[2 * idx + 1]));
+                }
+        }
+
+        /* Queries interval [l, r) in O(log N). */
         int query(int l, int r) {
                 return _query(l, r, 0, N, 1);
         }
         
+        /* Updates interval [l, r) in O(log N) with val. */
         void update(int l, int r, int val) {
                 _update(l, r, 0, N, 1, val);
         }
